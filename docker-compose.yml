@@ -1,0 +1,165 @@
+version: "3.9"
+
+services:
+  # ---------------------------------------------------------------------
+  # Bus de mensajeria para la Saga Coreografiada
+  # ---------------------------------------------------------------------
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: saga-rabbitmq
+    ports:
+      - "5672:5672"     # protocolo AMQP
+      - "15672:15672"   # panel de administracion (guest/guest)
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+    networks:
+      - saga-net
+
+  # ---------------------------------------------------------------------
+  # Capa de Observabilidad: recibe y transmite en tiempo real (Socket.IO)
+  # cada paso, exito, fallo y compensacion de cualquier saga
+  # ---------------------------------------------------------------------
+  audit-service:
+    build: ./services/audit-service
+    container_name: saga-audit-service
+    ports:
+      - "4005:4005"
+    volumes:
+      - audit-data:/app/data
+    environment:
+      - PORT=4005
+    networks:
+      - saga-net
+
+  # ---------------------------------------------------------------------
+  # Microservicios de dominio bancario (Database-per-Service: cada uno
+  # con su propio SQLite embebido y aislado en su propio volumen)
+  # ---------------------------------------------------------------------
+  account-service:
+    build: ./services/account-service
+    container_name: saga-account-service
+    ports:
+      - "4002:4002"
+    volumes:
+      - account-data:/app/data
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      - PORT=4002
+      - RABBIT_URL=amqp://rabbitmq:5672
+      - AUDIT_URL=http://audit-service:4005
+      - DELAY_MIN_MS=2000
+      - DELAY_MAX_MS=4000
+      - DEFAULT_BALANCE=5000000
+    networks:
+      - saga-net
+
+  risk-service:
+    build: ./services/risk-service
+    container_name: saga-risk-service
+    ports:
+      - "4003:4003"
+    volumes:
+      - risk-data:/app/data
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      - PORT=4003
+      - RABBIT_URL=amqp://rabbitmq:5672
+      - AUDIT_URL=http://audit-service:4005
+      - DELAY_MIN_MS=2000
+      - DELAY_MAX_MS=4000
+      - DAILY_LIMIT=50000000
+    networks:
+      - saga-net
+
+  clearing-service:
+    build: ./services/clearing-service
+    container_name: saga-clearing-service
+    ports:
+      - "4004:4004"
+    volumes:
+      - clearing-data:/app/data
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      - PORT=4004
+      - RABBIT_URL=amqp://rabbitmq:5672
+      - AUDIT_URL=http://audit-service:4005
+      - DELAY_MIN_MS=2000
+      - DELAY_MAX_MS=4000
+    networks:
+      - saga-net
+
+  # ---------------------------------------------------------------------
+  # Coordinador central de la Saga Orquestada
+  # ---------------------------------------------------------------------
+  orchestrator-service:
+    build: ./services/orchestrator-service
+    container_name: saga-orchestrator-service
+    ports:
+      - "4001:4001"
+    depends_on:
+      - account-service
+      - risk-service
+      - clearing-service
+      - audit-service
+    environment:
+      - PORT=4001
+      - ACCOUNT_URL=http://account-service:4002
+      - RISK_URL=http://risk-service:4003
+      - CLEARING_URL=http://clearing-service:4004
+      - AUDIT_URL=http://audit-service:4005
+    networks:
+      - saga-net
+
+  # ---------------------------------------------------------------------
+  # API Gateway: punto de entrada centralizado del frontend
+  # ---------------------------------------------------------------------
+  api-gateway:
+    build: ./services/api-gateway
+    container_name: saga-api-gateway
+    ports:
+      - "4000:4000"
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      orchestrator-service:
+        condition: service_started
+    environment:
+      - PORT=4000
+      - ORCHESTRATOR_URL=http://orchestrator-service:4001
+      - ACCOUNT_URL=http://account-service:4002
+      - RABBIT_URL=amqp://rabbitmq:5672
+    networks:
+      - saga-net
+
+  # ---------------------------------------------------------------------
+  # Frontend React (build servido por Nginx)
+  # ---------------------------------------------------------------------
+  frontend:
+    build: ./frontend
+    container_name: saga-frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - api-gateway
+      - audit-service
+    networks:
+      - saga-net
+
+networks:
+  saga-net:
+    driver: bridge
+
+volumes:
+  audit-data:
+  account-data:
+  risk-data:
+  clearing-data:
