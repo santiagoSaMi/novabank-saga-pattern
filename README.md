@@ -143,3 +143,7 @@ saga-bank-workshop/
   y panel de saldos para verificar la consistencia final.
 - **Aislamiento de datos e idempotencia** (criterio 5): cada microservicio tiene su propio archivo
   SQLite (volumen Docker independiente) y una tabla de idempotencia por `idempotencyKey` + operación.
+
+## 7. Video de demostración
+
+https://github.com/user-attachments/assets/3190796c-11bf-4d31-99a6-a618a1bc6995
