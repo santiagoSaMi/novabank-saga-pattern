@@ -1,5 +1,9 @@
 # NovaBank International — Patrón Saga Bancario
 
+**Integrantes:** Josue David Sarmiento Angulo y Santiago Sabogal Millan
+
+Para el informe, revisar la Wiki del repositorio.
+
 Implementación del taller **"Implementación del Patrón Saga Bancario, Coreografía vs. Orquestación y Observabilidad"**.
 
 Transferencias interbancarias de alto valor sin bloqueos globales (2PC), usando el **Patrón Saga** bajo el
