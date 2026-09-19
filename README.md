@@ -1,6 +1,6 @@
 # NovaBank International — Patrón Saga Bancario
 
-**Integrantes:** Josue David Sarmiento Angulo y Santiago Sabogal Millan
+**Integrantes:** Josue David Sarmiento Guarnizo y Santiago Sabogal Millan
 
 Para el informe, revisar la Wiki del repositorio.
 
